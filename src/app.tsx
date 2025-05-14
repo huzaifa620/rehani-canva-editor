@@ -31,34 +31,20 @@ export const App = () => {
         const listing = listings[index];
         const base64 = await convertImageToBase64(listing.image);
 
-        if (index === 0) {
-          // Use existing first page
-          await addElementAtPoint({
-            type: "image",
-            altText: undefined,
-            dataUrl: base64,
-            top: 0,
-            left: 0,
-            width: 1080,
-            height: 1080,
-          });
-        } else {
-          // Add new page for remaining listings
-          await addPage({
-            title: listing.rehani_id,
-            elements: [
-              {
-                type: "image",
-                altText: undefined,
-                dataUrl: base64,
-                top: 0,
-                left: 0,
-                width: 1080,
-                height: 1080,
-              },
-            ],
-          });
-        }
+        await addPage({
+          title: listing.rehani_id,
+          elements: [
+            {
+              type: "image",
+              altText: undefined,
+              dataUrl: base64,
+              top: 0,
+              left: 0,
+              width: 1080,
+              height: 1080,
+            },
+          ],
+        });
       }
     } catch (err) {
       console.error("Image insertion failed:", err);
