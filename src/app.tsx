@@ -1,8 +1,9 @@
 import { Button, Rows, Text } from "@canva/app-ui-kit";
 import { FormattedMessage, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
-import { addPage, addElementAtPoint, getCurrentPageContext, requestExport } from "@canva/design";
+import { addPage, getCurrentPageContext, requestExport } from "@canva/design";
 import { useState } from "react";
+import JSZip from "jszip";
 
 export const App = () => {
   const intl = useIntl();
@@ -10,6 +11,7 @@ export const App = () => {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [exportedFiles, setExportedFiles] = useState<File[]>([]);
 
   const listings = [
     {
@@ -26,10 +28,10 @@ export const App = () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setExportedFiles([]);
 
     try {
-      for (let index = 0; index < listings.length; index++) {
-        const listing = listings[index];
+      for (const listing of listings) {
         const base64 = await convertImageToBase64(listing.image);
 
         await addPage({
@@ -56,11 +58,11 @@ export const App = () => {
     }
   };
 
-  // 2. New export function
   const exportToWebApp = async () => {
     setExporting(true);
     setError(null);
-    
+    setExportedFiles([]);
+
     try {
       const context = await getCurrentPageContext();
       
@@ -71,22 +73,15 @@ export const App = () => {
       const result = await requestExport({
         acceptedFileTypes: ["jpg", "png", "gif", "video", "svg"],
       });
-      console.log('first2', result)
-      if (result.status === "completed") {
-        const exportedImages = await Promise.all(
-          result.exportBlobs.map(async (exportedImage) => {
-            const response = await fetch(exportedImage.url);
-            const blob = await response.blob();
-            return {
-              name: exportedImage.url,
-              blob: blob
-            };
-          })
-        );
 
-        setSuccess(`Successfully exported ${exportedImages.length} images`);
-        console.log("Exported images:", exportedImages);
+      if (result.status === "completed") {
+        const zipResponse = await fetch(result.exportBlobs[0].url);
+        const zipBlob = await zipResponse.blob();
+        const imageFiles = await extractFilesFromZip(zipBlob);
         
+        setExportedFiles(imageFiles);
+        console.log("Extracted image files:", imageFiles);
+        setSuccess(`Successfully extracted ${imageFiles.length} images`);
       }
     } catch (err) {
       console.error("Export failed:", err);
@@ -96,8 +91,32 @@ export const App = () => {
     }
   };
 
+  const extractFilesFromZip = async (zipBlob: Blob): Promise<File[]> => {
+    const zip = await JSZip.loadAsync(zipBlob);
+    const imageFiles: File[] = [];
+
+    await Promise.all(
+      Object.keys(zip.files).map(async (filename) => {
+        const zipFile = zip.files[filename];
+        if (!zipFile.dir) {
+          const fileBlob = await zipFile.async('blob');
+          const fileExt = filename.split('.').pop() || 'jpg';
+          const fileName = `exported-${Date.now()}-${imageFiles.length}.${fileExt}`;
+
+          imageFiles.push(new File([fileBlob], fileName, {
+            type: fileBlob.type || 'image/jpeg',
+            lastModified: Date.now()
+          }));
+        }
+      })
+    );
+
+    return imageFiles;
+  };
+
   const convertImageToBase64 = async (url: string): Promise<string> => {
     const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch image: ${url}`);
     const blob = await res.blob();
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -105,6 +124,14 @@ export const App = () => {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
+  };
+
+  const downloadFile = (file: File) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   return (
@@ -131,7 +158,6 @@ export const App = () => {
         {success && <Text>{success}</Text>}
         {error && <Text>{error}</Text>}
 
-        {/* New Export Button - only show after successful creation */}
         {success && (
           <Button
             variant="secondary"
@@ -146,6 +172,45 @@ export const App = () => {
         )}
 
         {exporting && <Text>⏳ Exporting images...</Text>}
+
+        {exportedFiles.length > 0 && (
+          <div style={{ marginTop: "16px" }}>
+            <Text size="large">Exported Image Previews</Text>
+            <Rows spacing="2u">
+              {exportedFiles.map((file, index) => (
+                <div key={index} style={{ 
+                  border: "1px solid #e5e5e5",
+                  borderRadius: "8px",
+                  padding: "12px",
+                  backgroundColor: "#f9f9f9"
+                }}>
+                  <Text size="small" tone="tertiary">
+                    {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                  </Text>
+                  <div style={{ margin: "8px 0" }}>
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={`Preview ${index}`}
+                      style={{
+                        width: "100%",
+                        maxWidth: "300px",
+                        height: "auto",
+                        borderRadius: "4px"
+                      }}
+                    />
+                  </div>
+                  <Button
+                    onClick={() => downloadFile(file)}
+                    variant="tertiary"
+                    stretch
+                  >
+                    Download
+                  </Button>
+                </div>
+              ))}
+            </Rows>
+          </div>
+        )}
       </Rows>
     </div>
   );
