@@ -2,7 +2,7 @@ import { Button, Rows, Text } from "@canva/app-ui-kit";
 import { FormattedMessage, useIntl } from "react-intl";
 import * as styles from "styles/components.css";
 import { addPage, getCurrentPageContext, requestExport } from "@canva/design";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import JSZip from "jszip";
 
 export const App = () => {
@@ -12,17 +12,27 @@ export const App = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [exportedFiles, setExportedFiles] = useState<File[]>([]);
+  const [listings, setListings] = useState<
+    { rehani_id: string; image: string }[]
+  >([]);
+  useEffect(() => {
+    const fetchListings = async () => {
+      try {
+        const res = await fetch(
+          "http://127.0.0.1:8000/api/v1/campaign/canva/edit-objects/get",
+        );
+        const data = await res.json();
+        setListings(data.listings || []);
+      } catch (err) {
+        console.error("Failed to fetch listings", err);
+        setError("Failed to load listings.");
+      }
+    };
 
-  const listings = [
-    {
-      rehani_id: "1-bedroom-apt-in-kenya",
-      image: "https://rehani-s3.s3.amazonaws.com/listings/gomolemokhaba/compressed_images/IMG-20250406-WA0005_0739cfdf.jpg",
-    },
-    {
-      rehani_id: "3-bedroom-apt-in-kenya",
-      image: "https://rehani-s3.s3.amazonaws.com/listings/viyer46995/compressed_images/tree-9448275_4a500c17.jpg",
-    },
-  ];
+    fetchListings();
+  }, []);
+
+  const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
   const onClick = async () => {
     setLoading(true);
@@ -48,6 +58,7 @@ export const App = () => {
             },
           ],
         });
+        await wait(500);
       }
       setSuccess("Pages created successfully! Now you can export them.");
     } catch (err) {
@@ -65,11 +76,11 @@ export const App = () => {
 
     try {
       const context = await getCurrentPageContext();
-      
+
       if (!context) {
         throw new Error("No active design context found");
       }
-      
+
       const result = await requestExport({
         acceptedFileTypes: ["jpg", "png", "gif", "video", "svg"],
       });
@@ -78,7 +89,7 @@ export const App = () => {
         const zipResponse = await fetch(result.exportBlobs[0].url);
         const zipBlob = await zipResponse.blob();
         const imageFiles = await extractFilesFromZip(zipBlob);
-        
+
         setExportedFiles(imageFiles);
         console.log("Extracted image files:", imageFiles);
         setSuccess(`Successfully extracted ${imageFiles.length} images`);
@@ -99,16 +110,18 @@ export const App = () => {
       Object.keys(zip.files).map(async (filename) => {
         const zipFile = zip.files[filename];
         if (!zipFile.dir) {
-          const fileBlob = await zipFile.async('blob');
-          const fileExt = filename.split('.').pop() || 'jpg';
+          const fileBlob = await zipFile.async("blob");
+          const fileExt = filename.split(".").pop() || "jpg";
           const fileName = `exported-${Date.now()}-${imageFiles.length}.${fileExt}`;
 
-          imageFiles.push(new File([fileBlob], fileName, {
-            type: fileBlob.type || 'image/jpeg',
-            lastModified: Date.now()
-          }));
+          imageFiles.push(
+            new File([fileBlob], fileName, {
+              type: fileBlob.type || "image/jpeg",
+              lastModified: Date.now(),
+            }),
+          );
         }
-      })
+      }),
     );
 
     return imageFiles;
@@ -127,7 +140,7 @@ export const App = () => {
   };
 
   const downloadFile = (file: File) => {
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = URL.createObjectURL(file);
     a.download = file.name;
     a.click();
@@ -144,12 +157,7 @@ export const App = () => {
           />
         </Text>
 
-        <Button 
-          variant="primary" 
-          onClick={onClick} 
-          stretch 
-          disabled={loading}
-        >
+        <Button variant="primary" onClick={onClick} stretch disabled={loading}>
           {loading
             ? intl.formatMessage({ defaultMessage: "Uploading..." })
             : intl.formatMessage({ defaultMessage: "Insert Listings" })}
@@ -178,12 +186,15 @@ export const App = () => {
             <Text size="large">Exported Image Previews</Text>
             <Rows spacing="2u">
               {exportedFiles.map((file, index) => (
-                <div key={index} style={{ 
-                  border: "1px solid #e5e5e5",
-                  borderRadius: "8px",
-                  padding: "12px",
-                  backgroundColor: "#f9f9f9"
-                }}>
+                <div
+                  key={index}
+                  style={{
+                    border: "1px solid #e5e5e5",
+                    borderRadius: "8px",
+                    padding: "12px",
+                    backgroundColor: "#f9f9f9",
+                  }}
+                >
                   <Text size="small" tone="tertiary">
                     {file.name} ({(file.size / 1024).toFixed(1)} KB)
                   </Text>
@@ -195,7 +206,7 @@ export const App = () => {
                         width: "100%",
                         maxWidth: "300px",
                         height: "auto",
-                        borderRadius: "4px"
+                        borderRadius: "4px",
                       }}
                     />
                   </div>
