@@ -15,17 +15,21 @@ export const App = () => {
   const [listings, setListings] = useState<
     { rehani_id: string; image: string }[]
   >([]);
+
   useEffect(() => {
     const fetchListings = async () => {
+      setLoading(true);
       try {
         const res = await fetch(
-          "http://127.0.0.1:8000/api/v1/campaign/canva/edit-objects/get",
+          "https://render-prod.rehanisoko-internal.com/api/v1/campaign/canva/edit-objects/get",
         );
         const data = await res.json();
         setListings(data.listings || []);
       } catch (err) {
         console.error("Failed to fetch listings", err);
         setError("Failed to load listings.");
+      } finally {
+        setLoading(false);
       }
     };
 
