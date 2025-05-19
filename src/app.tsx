@@ -21,7 +21,7 @@ export const App = () => {
       setLoading(true);
       try {
         const res = await fetch(
-          "https://render-prod.rehanisoko-internal.com/api/v1/campaign/canva/edit-objects/get",
+          "http://127.0.0.1:8000/api/v1/campaign/canva/edit-objects/get",
         );
         const data = await res.json();
         setListings(data.listings || []);
@@ -97,6 +97,29 @@ export const App = () => {
         setExportedFiles(imageFiles);
         console.log("Extracted image files:", imageFiles);
         setSuccess(`Successfully extracted ${imageFiles.length} images`);
+
+        const formData = new FormData();
+
+        imageFiles.forEach((file, index) => {
+          const rehaniId = listings[index]?.rehani_id || `unknown-${index}`;
+          formData.append("data", JSON.stringify({ rehani_id: rehaniId }));
+          formData.append("img", file);
+        });
+
+        const uploadRes = await fetch(
+          "http://127.0.0.1:8000/api/v1/campaign/canva/edit-objects/upload",
+          {
+            method: "POST",
+            body: formData,
+          },
+        );
+
+        if (!uploadRes.ok) {
+          throw new Error("Upload to server failed");
+        }
+
+        const uploadResult = await uploadRes.json();
+        console.log("Upload success:", uploadResult);
       }
     } catch (err) {
       console.error("Export failed:", err);
